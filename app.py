@@ -1,9 +1,21 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, flash, session, request, redirect
 from flask_bootstrap import Bootstrap
+from flask_mysqldb import MySQL
+from werkzeug.security import generate_password_hash, check_password_hash
+import yaml, os
 
 
 app = Flask(__name__)
 Bootstrap(app)
+
+db = yaml.load(open("db.yaml"), Loader=yaml.FullLoader)
+app.config["MYSQL_HOST"] = db["mysql_host"]
+app.config["MYSQL_USER"] = db["mysql_user"]
+app.config["MYSQL_PASSWORD"] = db["mysql_password"]
+app.config["MYSQL_DB"] = db["mysql_db"]
+app.config["MYSQL_URSORCLASS"] = "DictCursor"
+app.config["SECRET_KEY"] = os.urandom(24)
+mysql = MySQL(app)
 
 
 @app.route("/")
@@ -23,6 +35,28 @@ def blogs(id):
 
 @app.route("/register/", methods=["GET", "POST"])
 def register():
+    if request.method == "POST":
+        user_details = request.form
+        if user_details["password"] != user_details["confirmPassword"]:
+            flash("Passwords do not match! Try again!", "danger")
+            return render_template("register.html")
+
+        cursor = mysql.connection.cursor()
+        cursor.execute(
+            "INSERT INTO user(first_name, last_name, username, email, password) VALUES (%s, %s, %s, %s, %s)",
+            (
+                user_details["firstname"],
+                user_details["lastname"],
+                user_details["username"],
+                user_details["email"],
+                generate_password_hash(user_details["password"]),
+            ),
+        )
+        mysql.connection.commit()
+        cursor.close()
+        flash("Registration successful! Please login", "success")
+        return redirect("/login/")
+
     return render_template("register.html")
 
 
